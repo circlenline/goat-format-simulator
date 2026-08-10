@@ -1,0 +1,27 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import { installDOM } from "./domstub.mjs";
+installDOM();
+const store={ goatDecks: JSON.stringify([{nombre:"Mi mazo",main:new Array(40).fill(14087893),extra:[],side:[],valido:true}]) };
+global.localStorage={ getItem:k=>store[k]??null, setItem:(k,v)=>{store[k]=v} };
+const html=readFileSync("./out/goat.html","utf-8");
+writeFileSync("./out/_mz.mjs", html.match(/<script type="module">([\s\S]*?)<\/script>/)[1]);
+console.warn=()=>{};
+await import("./out/_mz.mjs");
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+await sleep(300);
+document.getElementById("irJugar").onclick?.();
+await sleep(200);
+const lee=id=>(String(document.getElementById(id).innerHTML).match(/value="([^"]+)"[^>]*>([^<]*)</g)||[])
+  .map(s=>s.replace(/.*>/,"").trim());
+console.log("═══ MAZOS ═══");
+const mios=lee("mMazos"), ia=lee("mMazoIA");
+console.log("tu mazo — opciones:", mios.length);
+mios.forEach(m=>console.log("   ", m));
+console.log("\nmazo del rival — opciones:", ia.length);
+console.log("   ", ia.slice(0,3).join(" | "));
+console.log("\nincluye los tuyos del builder:", mios.some(m=>/Mi mazo \(tuyo\)/.test(m))?"✓":"✗");
+console.log("marca el incompleto:", mios.some(m=>/Warrior/.test(m)&&/⚠/.test(m))?"✓":"✗");
+await sleep(200);
+document.getElementById("mJugar").onclick?.();
+await sleep(9000);
+console.log("\ntras empezar:", String(document.getElementById("turnInfo").innerHTML).replace(/<[^>]+>/g,"").trim());
