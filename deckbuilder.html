@@ -32,12 +32,15 @@ input:focus,select:focus{outline:none;border-color:var(--gold)}
 #detalle .stats span{background:rgba(78,168,255,.12);border:1px solid var(--edge);padding:4px 10px}
 #detalle p{font-size:13px;line-height:1.6;color:#c3d2e8;white-space:pre-wrap}
 
-#centro{display:flex;flex-direction:column;min-width:0}
+/* min-height:0 es obligatorio: sin él, un hijo con overflow dentro de un
+   contenedor flex NO se encoge, crece hasta salirse y el scroll no aparece.
+   Reportado en Reddit: "no podía hacer scroll en la lista de cartas". */
+#centro{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
 #filtros{display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid var(--edge);flex:none;
   align-items:center;flex-wrap:wrap}
 #buscar{flex:1;min-width:180px}
 #conteo{font-size:11px;color:#7d94b5;letter-spacing:.08em}
-#grid{flex:1;overflow:auto;padding:14px 16px;display:grid;gap:10px;
+#grid{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:14px 16px;display:grid;gap:10px;
   grid-template-columns:repeat(auto-fill,minmax(var(--cw),1fr));align-content:start}
 .cc{position:relative;cursor:pointer;transition:.14s var(--ease)}
 .cc img{width:100%;aspect-ratio:.686;object-fit:fill;border-radius:2px;display:block;
@@ -57,7 +60,7 @@ input:focus,select:focus{outline:none;border-color:var(--gold)}
 #estado{font-size:13px;font-weight:700;letter-spacing:.06em}
 #estado.ok{color:#7fe3b0}#estado.mal{color:#ff8f7a}
 #reparto{font-size:11px;color:#7d94b5;margin-top:3px}
-#zonas{flex:1;overflow:auto;padding:12px 16px}
+#zonas{flex:1;min-height:0;overflow-y:auto;padding:12px 16px}
 .zona h4{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);
   margin:10px 0 7px;display:flex;justify-content:space-between;border-bottom:1px solid var(--edge);
   padding-bottom:5px}
@@ -240,6 +243,9 @@ const EN = {
   "¿Activar el efecto?":"Activate the effect?",
   "Arrastra para jugar o reordenar tu mano · ✦ = efecto disponible":
     "Drag to play or reorder your hand · ✦ = effect available",
+  "Arrastra para jugar · mantén pulsada una carta para verla · ✦ = efecto disponible":
+    "Drag to play · press and hold a card to read it · ✦ = effect available",
+  "Ver la carta grande":"View card full size",
   "No tienes jugadas disponibles":"No plays available",
   "Ver todas las acciones":"Show all actions",
   "Todas las acciones":"All actions",
@@ -283,6 +289,8 @@ const EN = {
   "Declara un Atributo":"Declare an Attribute",
   "Declara un número":"Declare a number",
   "Se revela la mano del rival":"Your opponent's hand is revealed",
+  "Carta boca abajo":"Face-down card",
+  "Toca una carta para verla":"Tap a card to view it",
   "Se ha roto algo":"Something broke",
   "Descargar log y avisar":"Download the log and report it",
   "Continuar":"Continue",
