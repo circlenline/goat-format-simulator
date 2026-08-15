@@ -361,6 +361,20 @@ const EN = {
     "Couldn't save (browser storage)",
   "Fusión":"Fusion", "Psíquico":"Psychic",
   "Importado":"Imported", "Guardado":"Saved", "Nuevo mazo":"New deck",
+  "Acciones":"Actions", "Plegar el panel":"Fold the panel away",
+  /* Se colaban en el deck builder: son texto fijo de la plantilla y no
+     estaban en la tabla. Los encontró la barrida de check-idioma. */
+  "Pasa el ratón por una carta para ver su texto.":
+    "Hover a card to read its text.",
+  "Clic en una carta del mazo: quitarla.":
+    "Click a card in the deck to remove it.",
+  "No hay combinación posible":"No valid combination",
+  "Sacrifica para sumar":"Tribute to total",
+  "Las combinaciones que suman justo salen ya hechas":"Valid combinations are worked out for you",
+  "por nombre":"by name", "adaptadas a Goat":"switched to the Goat version",
+  "sin identificar":"not recognised",
+  "Hay cartas que no son legales en Goat y no funcionarían":
+    "Some cards are not legal in Goat and would do nothing",
   "Mis mazos":"My decks", "Buscar":"Search",
 
   /* ── zonas y tipos (para los textos de las cartas) ── */
@@ -378,6 +392,10 @@ const EN = {
 
 /* Frases con datos dentro. El orden importa: gana la primera que encaje. */
 const REGLAS = [
+  /* Botones con un símbolo delante: "→ Terminar turno". La flecha no se
+     traduce, pero la frase sí, y como clave exacta no encajaba se quedaba
+     en español. Lo encontró la barrida de `check-idioma`. */
+  [/^([→▶►«»▸·•]+\s*)(.+)$/,             m=>m[1] + T(m[2])],
   [/^Turno (\d+) — Tú$/,                 m=>`Turn ${m[1]} — You`],
   [/^Turno (\d+) — Oponente$/,           m=>`Turn ${m[1]} — Opponent`],
   [/^Cadena (\d+): (.+)$/,               m=>`Chain ${m[1]}: ${m[2]}`],
@@ -423,6 +441,12 @@ let idiomaActual = "en";
 function setIdioma(l){ idiomaActual = (l==="es") ? "es" : "en"; }
 function idioma(){ return idiomaActual; }
 
+/* CAZADOR DE FUGAS. Cada frase que pasa por aquí y no encuentra
+   traducción se apunta en `globalThis.__T_FUGAS__` si esa lista existe.
+   No existe en el navegador —no cuesta nada— y `check-idioma.mjs` la
+   activa, juega una partida entera en inglés y saca la lista de lo que
+   sigue saliendo en español. Antes se buscaban a ojo y siempre quedaba
+   alguna: un usuario reportó dos veces "it's partially in Spanish". */
 function T(s){
   if(idiomaActual === "es" || s == null) return s;
   const t = String(s);
@@ -432,6 +456,7 @@ function T(s){
     const m = re.exec(t.trim());
     if(m) return fn(m);
   }
+  if(globalThis.__T_FUGAS__ && t.trim()) globalThis.__T_FUGAS__.add(t.trim());
   return s;
 }
 
@@ -497,6 +522,35 @@ const dat  = c => CARDS[c] ?? null;
 
 const poolSet = new Set(POOL.length ? POOL : Object.keys(CARDS).map(Number));
 const hayPool = POOL.length > 0;
+
+/* ── CARTAS MUDAS ──
+   Muchas cartas de Goat existen dos veces en la base: con su passcode
+   normal (Pyramid Turtle, 77044671) y con el de la revisión del formato
+   (Pyramid Turtle (GOAT), 504700135). El efecto —el script Lua— está SOLO
+   en el del pool. Con el otro código la carta se reparte, se invoca y no
+   hace nada, sin error y sin aviso.
+   Y el código "malo" es justo el que trae cualquier decklist copiada de
+   internet, que es por donde entraban: tres usuarios reportaron el mismo
+   día que Pyramid Turtle, Sinister Serpent y Nobleman of Crossout no
+   funcionaban. Todo lo que se importa se traduce aquí. */
+const baseNom = n => String(n||"")
+  .replace(/\s*\((GOAT|Pre-errata|Pre-Errata|Anime|Action Field)\)\s*$/i,"").trim().toLowerCase();
+const POR_NOMBRE_POOL = (()=>{
+  const m = new Map();
+  for(const k in TEXTS){
+    const code = +k, n2 = baseNom(TEXTS[k][0]);
+    if(!n2) continue;
+    const previo = m.get(n2);
+    if(previo===undefined || (!poolSet.has(previo) && poolSet.has(code))) m.set(n2, code);
+  }
+  return m;
+})();
+/* passcode legal equivalente, o null si esa carta no existe en Goat */
+function alPool(code){
+  if(poolSet.has(code)) return code;
+  const eq = POR_NOMBRE_POOL.get(baseNom(TEXTS[code]?.[0]));
+  return (eq!==undefined && poolSet.has(eq)) ? eq : null;
+}
 
 /* ── copias: el límite es por carta "real", contando alias ── */
 function copias(code){
@@ -623,9 +677,25 @@ function exportarYDK(){
 }
 function importarYDK(texto){
   const nuevo={main:[],extra:[],side:[]};
-  let z="main", desconocidas=[], porNombre=0;
+  let z="main", desconocidas=[], porNombre=0, traducidas=0;
+  /* Índice por nombre para las listas escritas a mano. Gana el código del
+     pool: si no, "Book of Moon" podía resolverse al passcode sin script. */
   const porNom = {};
-  for(const k in TEXTS) porNom[(TEXTS[k][0]||"").toLowerCase()] = +k;
+  for(const k in TEXTS){
+    const n2=(TEXTS[k][0]||"").toLowerCase(), code=+k;
+    if(porNom[n2]===undefined || (!poolSet.has(porNom[n2]) && poolSet.has(code)))
+      porNom[n2]=code;
+    const b=baseNom(TEXTS[k][0]);
+    if(porNom[b]===undefined || (!poolSet.has(porNom[b]) && poolSet.has(code)))
+      porNom[b]=code;
+  }
+  const mete = (code, zona) => {
+    const legal = alPool(code);
+    if(legal===null) return false;
+    if(legal!==code) traducidas++;
+    nuevo[(CARDS[legal].type & T_FUSION) && zona==="main" ? "extra" : zona].push(legal);
+    return true;
+  };
   for(let linea of texto.split(/\r?\n/)){
     linea=linea.trim(); if(!linea) continue;
     if(/^#main/i.test(linea)){ z="main"; continue; }
@@ -633,26 +703,25 @@ function importarYDK(texto){
     if(/^!side/i.test(linea)){ z="side"; continue; }
     if(linea.startsWith("#")) continue;
     if(/^\d{5,9}$/.test(linea)){                       // passcode
-      const c=+linea;
-      if(CARDS[c]) nuevo[(CARDS[c].type & T_FUSION) && z==="main" ? "extra" : z].push(c);
-      else desconocidas.push(linea);
+      if(!mete(+linea, z)) desconocidas.push(linea);
       continue;
     }
     // lista escrita a mano: "3x Book of Moon" o "Book of Moon"
     const m=/^(\d+)\s*[x×]?\s+(.*)$/i.exec(linea);
     const veces = m ? +m[1] : 1;
     const nombre = (m ? m[2] : linea).trim().toLowerCase();
-    const code = porNom[nombre];
-    if(code){ for(let i=0;i<veces;i++)
-        nuevo[(CARDS[code].type & T_FUSION) && z==="main" ? "extra" : z].push(code);
+    const code = porNom[nombre] ?? porNom[baseNom(nombre)];
+    if(code!==undefined && alPool(code)!==null){
+      for(let i=0;i<veces;i++) mete(code, z);
       porNombre+=veces;
     } else desconocidas.push(linea);
   }
   D.main=nuevo.main; D.extra=nuevo.extra; D.side=nuevo.side;
   pintarDeck();
   aviso(`${T("Importado")}: ${D.main.length}+${D.extra.length}`+
-        (porNombre?` · ${porNombre} por nombre`:"")+
-        (desconocidas.length?` · ${desconocidas.length} sin identificar`:""));
+        (porNombre?` · ${porNombre} ${T("por nombre")}`:"")+
+        (traducidas?` · ${traducidas} ${T("adaptadas a Goat")}`:"")+
+        (desconocidas.length?` · ${desconocidas.length} ${T("sin identificar")}`:""));
   if(desconocidas.length) console.warn("no identificadas:", desconocidas);
 }
 /* Fichero para el simulador: lleva los datos de carta que necesita,
